@@ -1,0 +1,502 @@
+// ---------------------------------------------------------------------------------
+// T E S T B E D 3
+//
+// Copyright (C) 2023-Present Wesley M. Conner
+//
+// LICENSE
+// Licensed under the Apache License, Version 2.0 (aka Apache-2.0, the
+// "License"), see http://www.apache.org/licenses/LICENSE-2.0. You may
+// not use this file except in compliance with the License. Unless
+// required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+// implied.
+// ---------------------------------------------------------------------------------
+// For reference:
+//   Unicode 2190 ← LEFTWARDS ARROW
+//   Unicode 2192 → RIGHTWARDS ARROW
+
+import com.hubitat.app.ChildDeviceWrapper as ChildDevW
+import groovy.transform.Field
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
+import java.util.regex.Matcher
+import java.util.regex.Pattern
+import groovy.lang.Closure
+
+@Field static ConcurrentHashMap<String, Map> TERMS = [:]
+@Field static ConcurrentHashMap<String, ArrayList> BLOCK_STASH = [:]
+// ----------------------------------------------------------------------------
+// Circa Q3'24 Hubitat DOES NOT allow the following java imports:
+//   - java.util.regex.MatchResult
+//   - java.util.function
+// Which would support writing functions like:
+//   - String replaceAllWithFn(
+//       String parserName,                  // Used with getTerm(parserName)
+//       String sIn,
+//       Function<MatchResult, String> replacerFn
+//     )
+//   - String stashContent(MatchResult mr) { ... }
+//   - String retrieveContent(MatchResult mr) { ... }
+// The following static Closures exist to close the gap.
+//   - getTerm          Required by Closure replaceAllWithFn
+//   - stashContent        Required by Closure replaceAllWithFn
+//   - retrieveContent     Required by Closure replaceAllWithFn
+//   - replaceAllWithFn
+// ----------------------------------------------------------------------------
+
+@Field static Closure stashContent = { Matcher m ->
+  String result = '>>>stashContent() ERROR<<<'
+  if (m.group(2)) {
+    String stashKey = java.time.Instant.now()
+    BLOCK_STASH[stashKey] = m.group(2)
+    result = "{{${stashKey}}}"
+  }
+  return result
+}
+@Field static Closure retrieveContent = { Matcher m ->
+  return BLOCK_STASH[m.group(2)]
+}
+
+@Field static Closure replaceAllWithFn = { Matcher m,
+                                           String sIn,
+                                           Closure replacerFn ->
+  m.reset(sIn)
+  ArrayList outBlks = []
+  Integer lStart = 0
+  String carryover
+  while (m.find()) {
+    outBlks << sIn.substring(lStart, m.start(1))
+    outBlks << replacerFn(m)
+    lStart = m.end()
+    carryover = sIn.substring(m.end(), sIn.size())
+  }
+  outBlks << carryover
+  return outBlks.join()
+}
+
+definition(
+  name: 'BlockF',
+  namespace: 'Wmc',
+  author: 'Wesley M. Conner',
+  description: 'Develop AsciiDoc-like parsing',
+  singleInstance: true,
+  iconUrl: '',
+  iconX2Url: ''
+)
+
+preferences {
+  page(name: 'BlockF')
+}
+
+Map BlockF() {
+  return dynamicPage(
+    name: 'BlockF',
+    title: 'BlockF',
+    install: true,
+    uninstall: true
+  ) {
+    section {
+      processString()
+    }
+  }
+}
+
+void addTerm(Map parms) {
+  // Abstract
+  //   Creates a RegExp Matcher wish robust replaceAll() capabilities.
+  // Parms:
+  //         name: String
+  //           re: String
+  //   replacerFn: Closure .. implies use of replaceAllWithFn()
+  //     replacer: String  .. implies native Matcher.replaceAll()
+  Map t = parms << [m: Pattern.compile(parms.re).matcher('')]
+  // Add an appropriate replaceAll() capability.
+  t['replaceAll'] = { String sIn ->
+    String sOut
+    if (t.replacerFn) {
+      sOut = replaceAllWithFn(t.m, sIn, t.replacerFn)
+    } else {
+      sOut = t.m.replaceAll(t.replacer)
+    }
+    return sOut
+  }
+  TERMS[parms.name] = t
+}
+
+String informationalHtmlTable(String tag, String content, String color) {
+  return """
+    <table width='80%'>
+      <tr style='vertical-align: center; text-align: center;'>
+        <td width='20%' style='height: 80px; border-right: 3mm ${color} solid;
+          font-size: 1.1em; text-align: center;'>
+          <b>${tag}</b>
+        </td>
+        <td style='text-align: left'>
+          ${content}
+        </td>
+      </tr>
+    </table>"""
+}
+
+String displayTip(Matcher m) {
+  return informationalHtmlTable('TIP', m.group(2), '#A0A0A0')
+}
+
+String displayImportant(Matcher m) {
+  return informationalHtmlTable('IMPORTANT', m.group(2), '#1434A4')
+}
+
+String displayWarning(Matcher m) {
+  return informationalHtmlTable('WARNING', m.group(2), '#D22B2B')
+}
+
+String displayCaution(Matcher m) {
+  return informationalHtmlTable('CAUTION', m.group(2), '#FFEA00')
+}
+
+void initializeTerms() {
+  // NOTES:
+  //   If this code comes to rest in an App | Device inclusion of terms
+  //   could be selectable with a series of input(...) selections.
+  addTerm(
+    name: 'PassthroughRange',
+    re: /(?ms)(^\+\+\+\+$)(.*?)(^\+\+\+\+$)/,
+    replacerFn: stashContent
+  )
+  addTerm(
+    name: 'PassthroughPara',
+    re: /(?ms)(^\[pass\]\n)(.*?\n)(\n|$)/,
+    replacerFn: stashContent
+  )
+  addTerm(
+    name: 'PassthroughBlock',
+    re: /(?ms)(^pass\[)(.*?)(\])/,
+    replacerFn: stashContent
+  )
+  addTerm(
+    name: 'StashRef',
+    re: /(\{\{)(.*?)(\}\})/,
+    replacerFn: retrieveContent
+  )
+  addTerm(
+    name: 'Linebreak',
+    re: /(?s)(\+\n)/,
+    replacer: ''  // Consumes (\+$^) with no replacement
+  )
+  addTerm(
+    name: 'Italic',
+    re: /(?s)(_)(.*?)_/,
+    replacer: '''<em>$2</em>'''
+  )
+  addTerm(
+    name: 'Bold',
+    re: /(?m)(?!^\*{1,3} )[^\*]*?(\*)(?!^\*+)(.*?)\*/,
+    replacer: '''<b>$2</b>'''
+  )
+  /*
+  addTerm(
+    name: 'Mono',
+    re: /(?s)(\+)(.*?)\+/,
+    replacer: '''<tt>$2</tt>'''
+  )
+  addTerm(
+    name: 'Superscript',
+    re: /(?s)(\^)(.*?)\^/,
+    replacer: '''<sup>$2</sup>'''
+  )
+  addTerm(
+    name: 'Subscript',
+    re: /(?s)(~)(.*?)~/,
+    replacer: '''<sub>$2</sub>'''
+  )
+  addTerm(
+    name: 'Command',
+    re: /(?s)(`)(.*?)`/,
+    replacer: '''<code>$2</code>'''
+  )
+  addTerm(
+    name: 'Foreground',
+    re: /(?sm)(\[)(?![^\]]*-background)([^\]]*)(\]\#)(.*?)\#/,
+    replacer: '''<span style='color: $2;'>$4</span>'''
+  )
+  addTerm(
+    name: 'Background',
+    re: /(?sm)(\[)([^\]]*?)(-background\]\#)(.*?)\#/,
+    replacer: '''<span style='background: $2;'>$4</span>'''
+  )
+  addTerm(
+    name: 'Big',
+    re: /(?s)(\[big\])(\#)(.*?)\#/,
+    replacer: '''<span style='font-size: 1.1em;'>$3</span>'''
+  )
+  addTerm(
+    name: 'Huge',
+    re: /(?s)(\[huge\])(\#)(.*?)\#/,
+    replacer: '''<span style='font-size: 1.3em;'>$3</span>'''
+  )
+  addTerm(
+    name: 'Heading1',
+    re: /(?m)(^= )(.*?)$/,
+    replacer: '''<span style='font-size: 3.0em;'>$2</span>'''
+  )
+  addTerm(
+    name: 'Heading2',
+    re: /(?m)(^== )(.*?)$/,
+    replacer: '''<span style='font-size: 2.0em;'>$2</span>'''
+  )
+  addTerm(
+    name: 'Heading3',
+    re: /(?m)(^=== )(.*?)$/,
+    replacer: '''<span style='font-size: 1.5em;'>$2</span>'''
+  )
+  addTerm(
+    name: 'Tip',
+    re: /(?m)(^TIP: )(.*?)$/,
+    replacerFn: displayTip
+  )
+  addTerm(
+    name: 'Important',
+    re: /(?m)(^IMPORTANT: )(.*?)$/,
+    replacerFn: displayImportant
+  )
+  addTerm(
+    name: 'Warning',
+    re: /(?m)(^WARNING: )(.*?)$/,
+    replacerFn: displayWarning
+  )
+  addTerm(
+    name: 'Caution',
+    re: /(?m)(^CAUTION: )(.*?)$/,
+    replacerFn: displayCaution
+  )
+  addTerm(
+    name: 'TermWithDefn',
+    re: /(?sm)^([^\n]*)::\n(?!*])(.*?)\n)?/,
+    replacer: '''<b>$1</b>::<br><ul>$2</ul>'''
+  )
+  addTerm(
+    name: 'TermWithBullets',
+    re: /(?sm)^([^\n]*)::\n(?*)/,
+    replacer: '''<b>$1</b>::<br>'''
+  )
+  addTerm(
+    name: 'Bullet1',
+    re: /(?sm)(^\* )(.*?)\n(?:\n|\*|$)/,
+    replacer: '''<ul><li>$2</li></ul>'''
+  )
+  addTerm(
+    name: 'Bullet2',
+    re: /(?sm)(^\*\* )(.*?)\n(?:\n|\*|$)/,
+    replacer: '''<ul><ul><li>$2</li></ul></ul>'''
+  )
+  addTerm(
+    name: 'Bullet3',
+    re: /(?sm)(^\*\*\* )(.*?)\n(?:\n|\*|$)/,
+    replacer: '''<ul><ul><ul><li>$2</li></ul></ul>'''
+  )
+  */
+}
+
+void processString() {
+  initializeTerms()
+  // Add TERMS by brute force for this test.
+  /*
+  addTerm(
+    name: 'PassthroughRange',
+    re: /(?ms)(^\+\+\+\+$)(.*?)(^\+\+\+\+$)/,
+    replacerFn: stashContent
+  )
+  addTerm(
+    name: 'PassthroughPara',
+    re: /(?ms)(^\[pass\]\n)(.*?\n)(\n|$)/,
+    replacerFn: stashContent
+  )
+  addTerm(
+    name: 'StashRef',
+    re: /(\{\{)(.*?)(\}\})/,
+    replacerFn: retrieveContent
+  )
+  */
+
+  // Test TERMS extraction
+  String sIn = getSampleData()
+  paragraph("sIn: >${sIn}<")
+
+  Map t1 = TERMS['PassthroughPara']
+  String s1 = t1.replaceAll(sIn)
+  paragraph("s1: >${s1}<")
+
+  Map t2 = TERMS['PassthroughRange']
+  String s2 = t2.replaceAll(s1)
+  paragraph("s2: >${s2}<")
+
+  Map t3 = TERMS['StashRef']
+  String s3 = t3.replaceAll(s2)
+  paragraph("s3: >${s3}<")
+}
+
+
+// THESE SPECIFIC METHODS WILL BE REFACTORED AND CACHES WILL BE USED.
+
+String matchAndReplace(String sArg) {
+  ArrayList allParsers = [
+    'PassthroughRange',
+    'PassthroughPara',
+    'PassthroughBlock',
+    'StashRef',
+    'Linebreak',
+    'Italic',
+    'Bold',
+    'Mono',
+    'Superscript',
+    'Subscript',
+    'Command',
+    'Foreground',
+    'Background',
+    'Big',
+    'Huge',
+    'Heading1',
+    'Heading2',
+    'Heading3',
+    'Tip',
+    'Important',
+    'Warning',
+    'Caution',
+    'TermWithDefn',
+    'TermWithBullets',
+    'Bullet1',
+    'Bullet2',
+    'Bullet3',
+  ]
+}
+
+String redEllipse() {
+  return '''<span style='color: red;'><b>…</b></span>'''
+}
+
+String glimpseString(String sArg) {
+  String s = sArg.replaceAll(/\n/, '␤')
+                 .replaceAll(/\r/, '␍')
+                 .replaceAll(/\s/, '▪')
+  Integer l = s.size()
+  return (l > 60)
+    ? "⦗${s.substring(0, 29)}⦘${redEllipse()}⦗${s.substring(l - 29, l - 1)}⦘"
+    : s
+}
+
+String retrieveAndFormat(def v, String name = null) {
+  // Abstract
+  //   Eventually: Might be better to have per-type signatures.
+  //   For now, this accommodates unknown/unexpected types.
+  String r = name ? "${name}: " : ''
+  switch (getObjectClassName(v)) {
+    case 'java.lang.String':
+      r += "<b>${v}</b>"
+      break
+    case 'java.util.ArrayList':
+      ArrayList sL = []
+      v.each{ e -> sL << "<em>${e}</em>" }
+      r += "[${sL.join(', ')}]"
+      break
+    case 'java.util.LinkedHashMap':
+      ArrayList sM = []
+      v.each { vk, vv -> sM << "<em>${vk}</em>: <b>${vv}</b>" }
+      r += "[${sM.join(', ')}]"
+      break
+    default:
+      r += "<b>${v}</b> <em>(${getObjectClassName(v)})</em>"
+  }
+  return r
+}
+
+// CORE METHODS
+
+void installed() {
+  // Called when a bare device is first constructed.
+  f()
+}
+
+void updated() {
+  // Called when a human uses the Hubitat GUI's Device drilldown page to edit
+  // preferences (aka settings) AND presses 'Save Preferences'.
+  f()
+}
+
+void uninstalled() {
+  // Called on device tear down.
+  f()
+}
+
+void f() {
+  log.info('f() For development: Emptying TERMS & BLOCK_STASH.')
+  TERMS = [:]
+  BLOCK_STASH = [:]
+}
+
+// Sample Data
+String getSampleData() {
+  String s1 = 'This is a test of the emergency broadcast system.'
+  List list1 = ['one', 'two', 'three', 'four', 'five']
+  Map map1 = [a: 'apple', b: 'banana', g: 'grape', l:'lemon', o: 'orange']
+  String testData = '''
+.Code Block (leading spaces)
+
+ This text should be presented 'as is' with no formatting. This text should be
+ presented 'as is' with no formatting. This text should be presented 'as is'
+ with no formatting. This text should be presented 'as is' with no formatting.
+ This text should be presented 'as is' with no formatting. This text should be
+ presented 'as is' with no formatting. This text should be presented 'as is'
+ with no formatting.
+
+.Passthrough Block
+START OF BLOCK
+
+++++
+=Ignored Level1 Header
+
+This text should be presented *as is* with no _formatting_. [blue]#this blue text#. This text should be
+presented `as is` with no formatting. This text should be presented 'as is'
+with no formatting. This text should be presented 'as is' with no formatting.
+This text should be presented 'as is' with no formatting. This text should be
+presented 'as is' with no formatting. This text should be presented 'as is'
+ with no formatting.
+++++
+
+END OF BLOCK
+
+.Normal Paragraph
+We the *People of the United States*, in Order to form a *more perfect Union*,
+establish Justice, insure domestic Tranquility, provide for the common defense,
+promote the general Welfare, and secure the Blessings of Liberty to ourselves
+and our Posterity, do ordain and establish this Constitution for the United
+States of America.
+
+.Normal Header with Pass Paragraph
+[pass]
+We the *People of the United States*, in Order to form a *more perfect Union*,
+establish Justice, insure domestic Tranquility, provide for the common defense,
+promote the general Welfare, and secure the Blessings of Liberty to ourselves
+and our Posterity, do ordain and establish this Constitution for the United
+States of America.
+
+[pass]
+.Header and Paragraph with Pass Construct
+We the *People of the United States*, in Order to form a *more perfect Union*,
+establish Justice, insure domestic Tranquility, provide for the common defense,
+promote the general Welfare, and secure the Blessings of Liberty to ourselves
+and our Posterity, do ordain and establish this Constitution for the United
+States of America.
+
+.Inline Passthrough Examples
+FIRST EXAMPLE: pass:[content like #{variable} passed directly to the output] followed by normal content.
+
+SECOND EXAMPLE: content with only select substitutions applied: pass:c,a[__<{John.Smith@google.com}>__]
+
+.Character-Level Escaping examples
+This is \\*not bold*, \\_not emphasized_, X\\^not_superscript^,
+\\https://google.com/[Google.com]
+
+= Yet Another Level1 Heading
+'''
+}
