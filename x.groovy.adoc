@@ -1,0 +1,66 @@
+= Iterations
+
+.Example 1 - No types an p IS NOT compiled
+  def p = /ab[d|f]/
+  def m = "abcabdabeabf" =~ p
+  log.info("m: ${m}")
+  m.each{ e -> log.info("e: ${e}") }
+
+.Example 2 - Types an p IS compiled
+  Pattern p = Pattern.compile(/ab[d|f]/)
+  Matcher m = ("abcabdabeabf" =~ p)
+  log.info("m: ${m}")
+  m.each{ e -> log.info("e: ${e}") }
+
+.Example 3 - Whole string match
+       Input: 'This is XboldX okay?'
+  log.info("processString at Entry s: ${s}")
+  Pattern p = Pattern.compile(/^(.*)X(.*)X(.*)$/)
+  Matcher m = (s =~ p)
+  Boolean b = m.matches()
+  log.info("processString b: ${b}")
+  m.eachWithIndex { e, i -> log.info("${i}: e -> ${e}") }
+  // 0: e -> [This is XboldX okay?, This is , old, okay?]
+
+.Example 4 - Same code, new data
+  Input: 'This is XboldX okay? Here is Xmore stuffX to process.'
+  NOTE: THAT RESULTS SUGGESTS A GREEDY FIRST MATCH; SO,
+        ONLY THE SECOND TARGET WAS PICKED UP.
+  0: e -> [
+    This is XboldX okay? Here is Xmore stuffX to process.,
+    This is XboldX okay? Here is , more stuff, to process.
+  ]
+
+.Example 5 - Switch to non-greedy terms
+  Pattern p = Pattern.compile(/^(.*?)X(.*?)X(.*?)$/)
+  0: e -> [
+    This is XboldX okay? Here is Xmore stuffX to process.,
+    This is , bold, okay? Here is Xmore stuffX to process.
+  ]
+
+.Example 6 - Adjusted loop structure
+  log.info("processString at Entry s: ${s}")
+  Pattern p = Pattern.compile(/^(.*?)X(.*?)X(.*?)$/)
+  Matcher m = (s =~ p)
+  while (m.matches()) { log.info("m: ${m}") }
+  I N F I N I T E   L O O P
+
+.Example 7 - Adjusted loop structure
+  log.info("processString at Entry s: ${s}")
+  Pattern p = Pattern.compile(/^(.*?)X(.*?)X(.*?)$/)
+  Matcher m = (s =~ p)
+  while (m.find()) { log.info("m: ${m}") }
+  I N F I N I T E   L O O P
+
+.Example 8 - Adjusted pattern and loop limiter
+  log.info("processString at Entry s: ${s}")
+  Pattern p = Pattern.compile(/X(.*?)X/)
+  Matcher m = (s =~ p)
+  Integer maxLoops = 5
+  while (maxLoops && m.find()) {
+    log.info("m: ${m}")
+    maxLoops = maxLoops - 1
+  }
+  WORKED - From Hubitat logs; so, order is reversed.
+  m: java.util.regex.Matcher[pattern=X(.*?)X region=0,53 lastmatch=Xmore stuffX]
+  m: java.util.regex.Matcher[pattern=X(.*?)X region=0,53 lastmatch=XboldX]

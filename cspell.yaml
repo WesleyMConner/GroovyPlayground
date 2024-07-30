@@ -1,0 +1,13 @@
+version: "0.2"
+language: en
+caseSensitive: false
+# Quote entries that include '*' or '**'.
+ignorePaths:
+  - .groovylintrc.json
+  - .vscode
+words:
+  - enroute
+  - groovylintrc
+  - hubitat
+  - pbsg
+  - wesmc
