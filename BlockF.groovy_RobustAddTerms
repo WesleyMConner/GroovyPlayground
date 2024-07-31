@@ -171,7 +171,7 @@ void initializeTerms() {
   )
   addTerm(
     name: 'PassthroughBlock',
-    re: /(?ms)(pass:\[)([^\]]*?)(\])/,
+    re: /(?ms)(^pass\[)(.*?)(\])/,
     replacerFn: stashContent
   )
   addTerm(
@@ -294,14 +294,14 @@ void initializeTerms() {
     re: /(?sm)(^\*\*\* )(.*?)\n(?:\n|\*|$)/,
     replacer: '''<ul><ul><ul><li>$2</li></ul></ul>'''
   )
+  /*
+  */
 }
 
 void processString() {
   initializeTerms()
   // Test TERMS extraction
   String sIn = getSampleData()
-
-  /*
   paragraph("sIn: >${sIn}<")
 
   Map t1 = TERMS['PassthroughPara']
@@ -315,21 +315,17 @@ void processString() {
   Map t3 = TERMS['StashRef']
   String s3 = t3.replaceAll(s2)
   paragraph("s3: >${s3}<")
-  */
-  String s = applyTerms(sIn)
-  paragraph("FINAL: >${s}<")
 }
 
 
 // THESE SPECIFIC METHODS WILL BE REFACTORED AND CACHES WILL BE USED.
 
-String applyTerms(String sArg) {
-  String s = sArg
-  [
+String matchAndReplace(String sArg) {
+  ArrayList allParsers = [
     'PassthroughRange',
     'PassthroughPara',
     'PassthroughBlock',
-    /*
+    'StashRef',
     'Linebreak',
     'Italic',
     'Bold',
@@ -353,14 +349,7 @@ String applyTerms(String sArg) {
     'Bullet1',
     'Bullet2',
     'Bullet3',
-    */
-    'StashRef',
-  ].each { term ->
-    Map t = TERMS[term]
-    s = t.replaceAll(s)
-    paragraph("After ${term}: >${s}<")
-  }
-  return s
+  ]
 }
 
 String redEllipse() {
@@ -483,7 +472,7 @@ States of America.
 .Inline Passthrough Examples
 FIRST EXAMPLE: pass:[content like #{variable} passed directly to the output] followed by normal content.
 
-SECOND EXAMPLE: content with only select substitutions applied: pass:[__<{John.Smith@google.com}>__]
+SECOND EXAMPLE: content with only select substitutions applied: pass:c,a[__<{John.Smith@google.com}>__]
 
 .Character-Level Escaping examples
 This is \\*not bold*, \\_not emphasized_, X\\^not_superscript^,
