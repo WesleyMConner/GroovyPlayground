@@ -57,7 +57,7 @@ import groovy.lang.Closure
         String paraRE = /(^\[pass\]\n)(.*?\n)(\n|$)/
         matcher = Pattern.compile(/(?ms)$paraRE/).matcher('')
         break
-      case 'StashRef':
+      case 'RestoreRef':
         matcher = Pattern.compile(/(\{\{)(.*?)(\}\})/).matcher('')
         break
       case 'Linebreak':
@@ -484,7 +484,7 @@ void processString() {
   paragraph("s2: >${s2}<")
   String s3 = replaceAllWithFn('PassthroughPara', s2, stashContent)
   paragraph("s3: >${s3}<")
-  String sFinal = replaceAllWithFn('StashRef', s3, retrieveContent)
+  String sFinal = replaceAllWithFn('RestoreRef', s3, retrieveContent)
   paragraph("sFinal: >${sFinal}<")
 }
 

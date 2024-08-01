@@ -118,7 +118,7 @@ Matcher getMatcher(String name) {
         String paraRE = /(^\[pass\]\n)(.*?\n)(\n|$)/
         matcher = Pattern.compile(/(?ms)$paraRE/).matcher('')
         break
-      case 'StashRef':
+      case 'RestoreRef':
         matcher = Pattern.compile(/(\{\{)(.*?)(\}\})/).matcher('')
         break
       case 'Linebreak':
@@ -483,7 +483,7 @@ void processString() {
   String sIn = getSampleData()
   String s2 = replaceAllWithFn('PassthroughRange', sIn, stashContent)
   String s3 = replaceAllWithFn('PassthroughPara', s2, stashContent)
-  String sFinal = replaceAllWithFn('StashRef', s3, retrieveContent)
+  String sFinal = replaceAllWithFn('RestoreRef', s3, retrieveContent)
   paragraph("sFinal: >$sFinal<")
 }
 

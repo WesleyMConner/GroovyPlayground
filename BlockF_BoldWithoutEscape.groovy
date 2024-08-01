@@ -26,25 +26,6 @@ import groovy.lang.Closure
 
 @Field static ConcurrentHashMap<String, Map> TERMS = [:]
 @Field static ConcurrentHashMap<String, ArrayList> BLOCK_STASH = [:]
-// ----------------------------------------------------------------------------
-// Circa Q3'24 Hubitat DOES NOT allow the following java imports:
-//   - java.util.regex.MatchResult
-//   - java.util.function
-// Which would support writing functions like:
-//   - String replaceAllWithFn(
-//       String parserName,                  // Used with getTerm(parserName)
-//       String sIn,
-//       Function<MatchResult, String> replacerFn
-//     )
-//   - String stashContent(MatchResult mr) { ... }
-//   - String retrieveContent(MatchResult mr) { ... }
-// The following static Closures exist to close the gap.
-//   - getTerm          Required by Closure replaceAllWithFn
-//   - stashContent        Required by Closure replaceAllWithFn
-//   - retrieveContent     Required by Closure replaceAllWithFn
-//   - replaceAllWithFn
-// ----------------------------------------------------------------------------
-
 @Field static Closure stashContent = { Matcher m ->
   String result = '>>>stashContent() ERROR<<<'
   if (m.group(2)) {
@@ -57,7 +38,6 @@ import groovy.lang.Closure
 @Field static Closure retrieveContent = { Matcher m ->
   return BLOCK_STASH[m.group(2)]
 }
-
 @Field static Closure replaceAllWithFn = { Matcher m,
                                            String sIn,
                                            Closure replacerFn ->
@@ -102,6 +82,16 @@ Map BlockF() {
   }
 }
 
+String replaceAllStrings(String s) {
+  return s.replaceAll(/\(C\)/, '©')
+          .replaceAll(/\(R\)/, '®')
+          .replaceAll(/\(TM\)/, '™')
+          .replaceAll(/--/, '—')
+          .replaceAll(/\.\.\./, '…')
+          .replaceAll(/->/, '→')
+          .replaceAll(/<-/, '←')
+}
+
 void addTerm(Map parms) {
   // Abstract
   //   Creates a RegExp Matcher wish robust replaceAll() capabilities.
@@ -117,6 +107,7 @@ void addTerm(Map parms) {
     if (t.replacerFn) {
       sOut = replaceAllWithFn(t.m, sIn, t.replacerFn)
     } else {
+      t.m.reset(sIn)
       sOut = t.m.replaceAll(t.replacer)
     }
     return sOut
@@ -171,7 +162,7 @@ void initializeTerms() {
   )
   addTerm(
     name: 'PassthroughBlock',
-    re: /(?ms)(^pass\[)(.*?)(\])/,
+    re: /(?ms)(pass:\[)([^\]]*?)(\])/,
     replacerFn: stashContent
   )
   addTerm(
@@ -182,7 +173,7 @@ void initializeTerms() {
   addTerm(
     name: 'Linebreak',
     re: /(?s)(\+\n)/,
-    replacer: ''  // Consumes (\+$^) with no replacement
+    replacer: '<br>'
   )
   addTerm(
     name: 'Italic',
@@ -191,10 +182,9 @@ void initializeTerms() {
   )
   addTerm(
     name: 'Bold',
-    re: /(?m)(?!^\*{1,3} )[^\*]*?(\*)(?!^\*+)(.*?)\*/,
-    replacer: '''<b>$2</b>'''
+    re: /(?m)(?!^\*{1,3} )([^\*]*?)(\*)(.*?)(?!^\*{1,3} )\*/,
+    replacer: '''$1<b>$3</b>'''
   )
-  /*
   addTerm(
     name: 'Mono',
     re: /(?s)(\+)(.*?)\+/,
@@ -272,12 +262,12 @@ void initializeTerms() {
   )
   addTerm(
     name: 'TermWithDefn',
-    re: /(?sm)^([^\n]*)::\n(?!*])(.*?)\n)?/,
+    re: /(?sm)^([^\n]*)::\n(?!\*)(.+?)\n\n/,
     replacer: '''<b>$1</b>::<br><ul>$2</ul>'''
   )
   addTerm(
     name: 'TermWithBullets',
-    re: /(?sm)^([^\n]*)::\n(?*)/,
+    re: /(?sm)^([^\n]*)(::)(?:\n\*)/,
     replacer: '''<b>$1</b>::<br>'''
   )
   addTerm(
@@ -295,59 +285,32 @@ void initializeTerms() {
     re: /(?sm)(^\*\*\* )(.*?)\n(?:\n|\*|$)/,
     replacer: '''<ul><ul><ul><li>$2</li></ul></ul>'''
   )
-  */
 }
 
 void processString() {
   initializeTerms()
-  // Add TERMS by brute force for this test.
-  /*
-  addTerm(
-    name: 'PassthroughRange',
-    re: /(?ms)(^\+\+\+\+$)(.*?)(^\+\+\+\+$)/,
-    replacerFn: stashContent
-  )
-  addTerm(
-    name: 'PassthroughPara',
-    re: /(?ms)(^\[pass\]\n)(.*?\n)(\n|$)/,
-    replacerFn: stashContent
-  )
-  addTerm(
-    name: 'RestoreRef',
-    re: /(\{\{)(.*?)(\}\})/,
-    replacerFn: retrieveContent
-  )
-  */
-
   // Test TERMS extraction
-  String sIn = getSampleData()
-  paragraph("sIn: >${sIn}<")
-
-  Map t1 = TERMS['PassthroughPara']
-  String s1 = t1.replaceAll(sIn)
-  paragraph("s1: >${s1}<")
-
-  Map t2 = TERMS['PassthroughRange']
-  String s2 = t2.replaceAll(s1)
-  paragraph("s2: >${s2}<")
-
-  Map t3 = TERMS['RestoreRef']
-  String s3 = t3.replaceAll(s2)
-  paragraph("s3: >${s3}<")
+  String s = getSampleData()
+  //----> paragraph("<b>SAMPLE DATA:</b><br>>${s}<")
+  s = replaceAllStrings(s)
+  //----> paragraph("<b>replaceAllStrings():</b><br>>${s}<")
+  s = applyTerms(s)
+  paragraph("<b>FINAL:</b><br>>${s}<")
 }
 
 
 // THESE SPECIFIC METHODS WILL BE REFACTORED AND CACHES WILL BE USED.
 
-String matchAndReplace(String sArg) {
-  ArrayList allParsers = [
+String applyTerms(String sArg) {
+  String s = sArg
+  [
     'PassthroughRange',
     'PassthroughPara',
     'PassthroughBlock',
-    'RestoreRef',
-    'Linebreak',
+    //'Linebreak',
     'Italic',
     'Bold',
+    /*
     'Mono',
     'Superscript',
     'Subscript',
@@ -368,7 +331,14 @@ String matchAndReplace(String sArg) {
     'Bullet1',
     'Bullet2',
     'Bullet3',
-  ]
+    'RestoreRef',
+    */
+  ].each { term ->
+    Map t = TERMS[term]
+    s = t.replaceAll(s)
+    //----> paragraph("<b>${term}:</b><br>>${s}<")
+  }
+  return s
 }
 
 String redEllipse() {
@@ -436,10 +406,103 @@ void f() {
 
 // Sample Data
 String getSampleData() {
-  String s1 = 'This is a test of the emergency broadcast system.'
-  List list1 = ['one', 'two', 'three', 'four', 'five']
-  Map map1 = [a: 'apple', b: 'banana', g: 'grape', l:'lemon', o: 'orange']
   String testData = '''
+1234567 101234567 201234567 301234567 401234567 501234567 601234567 701234567
+
+1234567 101234567 201234567 30
+
+1234567 101234567 20
+
+= First *Header* is #1
+normal paragraph -- 1
+
+== Second _Header_ is #2
+normal paragraph 2
+
+* My father had a small estate in Nottinghamshire; I was the third of five sons.
+He sent me to Emanuel College in Cambridge at fourteen years old, where I resided
+three years, and applied myself close to my studies; but the charge of maintaining
+me, although I had a very scanty allowance, being too great for a narrow fortune,
+I was bound apprentice to Mr. James Bates, an eminent surgeon in London, with
+whom I continued four years. My father now and then sending me small sums of
+money, I laid them out in learning navigation, and other parts of the mathematics,
+useful to those who intend to travel, as I always believed it would be, some
+time or other, my fortune to do. When I left Mr. Bates, I went down to my
+father: where, by the assistance of him and my uncle John, and some other
+relations, I got forty pounds, and a promise of thirty pounds a year to maintain
+me at Leyden: there I studied physic two years and seven months, knowing it
+would be useful in long voyages. _GULLIVER’S TRAVELS
+
+** Soon after my return from Leyden, I was recommended by my good master, Mr.
+Bates, to be surgeon to the Swallow, Captain Abraham Pannel, commander; with
+whom I continued three years and a half, making a voyage or two into the Levant,
+and some other parts. When I came back I resolved to settle in London; to which
+Mr. Bates, my master, encouraged me, and by him I was recommended to several
+patients. I took part of a small house in the Old Jewry; and being advised to
+alter my condition, I married Mrs. Mary Burton, second daughter to Mr. Edmund
+Burton, hosier, in Newgate-street, with whom I received four hundred pounds
+for a portion. _GULLIVER’S TRAVELS
+
+*** But my good master Bates dying in two years after, and I having few friends,
+my business began to fail; for my conscience would not suffer me to imitate the
+bad practice of too many among my brethren. Having therefore consulted with my
+wife, and some of my acquaintance, I determined to go again to sea. I was
+surgeon successively in two ships, and made several voyages, for six years, to
+the East and West Indies, by which I got some addition to my fortune. My hours
+of leisure I spent in reading the best authors, ancient and modern, being always
+provided with a good number of books; and when I was ashore, in observing the
+manners and dispositions of the people, as well as learning their language;
+wherein I had a great facility, by the strength of my memory. _GULLIVER’S
+TRAVELS
+
+=== This is `Header 3`
+
+normal paragraph 3 +
+with continuation to next line.
+
+normal paragraph 4 that keeps on `going and going and going` and going and going
+and going and going and going and going and ... going and going and going and
+going and going.
+
+descriptive list1::
+descriptive list information ... one two three four five
+descriptive list2::
+* My father had a small estate in Nottinghamshire; I was the third of five sons.
+He sent me to Emanuel College in Cambridge at fourteen years old, where I resided
+three years, and applied myself close to my studies; but the charge of maintaining
+me, although I had a very scanty allowance, being too great for a narrow fortune,
+I was bound apprentice to Mr. James Bates, an eminent surgeon in London, with
+whom I continued four years. My father now and then sending me small sums of
+money, I laid them out in learning navigation, and other parts of the mathematics,
+useful to those who intend to travel, as I always believed it would be, some
+time or other, my fortune to do. When I left Mr. Bates, I went down to my
+father: where, by the assistance of him and my uncle John, and some other
+relations, I got forty pounds, and a promise of thirty pounds a year to maintain
+me at Leyden: there I studied physic two years and seven months, knowing it
+would be useful in long voyages. _GULLIVER’S TRAVELS
+
+** Soon after my return from Leyden, I was recommended by my good master, Mr.
+Bates, to be surgeon to the Swallow, Captain Abraham Pannel, commander; with
+whom I continued three years and a half, making a voyage or two into the Levant,
+and some other parts. When I came back I resolved to settle in London; to which
+Mr. Bates, my master, encouraged me, and by him I was recommended to several
+patients. I took part of a small~house~ in the Old Jewry; and being advised to
+alter my condition, I married Mrs. Mary Burton, second daughter to Mr. Edmund
+Burton, hosier, in Newgate-street, with whom I received four hundred pounds
+for a portion. _GULLIVER’S TRAVELS
+
+*** But my good master Bates dying in two years after, and I having few friends,
+my business began to fail; for my conscience would not suffer me to imitate the
+bad practice of too many among my brethren. Having therefore consulted with my
+wife, and some of my acquaintance, I determined to go again to sea. I was
+surgeon successively in two ships, and made several voyages, for six years, to
+the East and West Indies, by which I got some addition to my fortune. My hours
+of leisure I spent in reading the best authors, ancient and modern, being always
+provided with a good number of books; and when I was ashore, in observing the
+manners and dispositions of the people, as well as learning their language;
+wherein I had a great facility, by the strength of my memory. _GULLIVER’S
+TRAVELS
+
 .Code Block (leading spaces)
 
  This text should be presented 'as is' with no formatting. This text should be
@@ -491,12 +554,63 @@ States of America.
 .Inline Passthrough Examples
 FIRST EXAMPLE: pass:[content like #{variable} passed directly to the output] followed by normal content.
 
-SECOND EXAMPLE: content with only select substitutions applied: pass:c,a[__<{John.Smith@google.com}>__]
+SECOND EXAMPLE: content with only select substitutions applied: pass:[__<{John.Smith@google.com}>__]
 
 .Character-Level Escaping examples
 This is \\*not bold*, \\_not emphasized_, X\\^not_superscript^,
 \\https://google.com/[Google.com]
 
 = Yet Another Level1 Heading
+
+.Mixed Font Features
+Here is some text with various things embedded, including: this^superscript^,
+this~subscript~, `thisCommand`, [blue]#this blue text#, [red]#this red text#
+[yellow-background]#this text with yellow background#.
+[#90EE90-background]#This is text with lightgreen (90EE90) background#. Here is
+[big]#some big text#. Here is [huge]#some huge text#. Back to normal text.
+
+Line that does not have mono text.
+
+Line that +does have mono+ text.
+
+Line that `does have command` text.
+
+.This acts as a simple header
+This is a paragraph that runs for more than one line. It's just here* to occupy
+space and flesh-out testing. For the most part, it can be ignored.
+
+.Special Text
+Copyright(C),TemporaryMark(TM),Registered(R),EmDash--,Ellipse...,
+RightArrow->,LeftArrow<-
+
+[cols = 3]
+|===
+|row 1 col 1
+|row 1 col 2 +
+more row 1 col 2
+|row 1 col 3
+|row 2 col 1 |row 2 col 2
+|row 2 col 3
+|row 3 col 1 +
+More for row3 col1
+|row 3 col 2 |row 3 col 3
+|===
+
+== Check special character replacements
+  Example 1: (C)
+  Example 2: (R)
+  Example 3: (TM)
+  Example 4: --
+  Example 5: ...
+  Example 6: ->
+  Example 7: <-
+
+TIP: This is a tip.
+
+IMPORTANT: This is important.
+
+WARNING: This is a warning.
+
+CAUTION: This is a caution.
 '''
 }

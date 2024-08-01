@@ -1,0 +1,27 @@
+= Playground
+
+This project experiments with efficiently parsing AsciiDoc in the VERY limited
+arena of a Hubitat Groovy Sandbox (HGS).
+
+Efficient parsing is possible - even with the severe limitations of HGS.
+
+That said, AsciiDoc is orthogonal to current work targets and is being parked for now.
+
+== Status at Time of Park
+
+* BlockF.groovy is a toy Hubitat application.
+* Included elements in the "parked as is" code, include:
+** A strategy for parsing text efficiently.
+** Uses *BLOCK_STASH* exchange text for a key (timestamp).
+** Use of compiled RE/Matchers to perform efficient `replaceAll()`.
+** Use of a custom `replaceAllWithFn()` to intercept replacements
+that require custom handling - e.g, stashing.
+** Use of `@Field static Closure` to write Closures for methods/functionality
+not available in HBS.
+** Use of parameter Maps to feed supplemental data to fewer such closures.
+
+== Next Steps if Resumed
+
+* Decide what Closures are required to "finalize" (wrap and stash) intermediate terms.
+* Adjust REs to said Closures
+* Punctuate HTML for proper whitepace, font size, etc.

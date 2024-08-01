@@ -64,7 +64,7 @@ Matcher getMatcher(String name) {
         String paraRE = /(^(\[pass]\n)(.*?)\n(\n|$))/
         matcher = Pattern.compile(/(?ms)$rangeRE|$paraRE/).matcher('')
         break
-      case 'StashRef':
+      case 'RestoreRef':
         matcher = Pattern.compile(/(\{\{)(.*?)(\}\})/).matcher('')
         break
       case 'Linebreak':
@@ -500,7 +500,7 @@ void isolatePassthrough(String s) {
   String s2 = sBlks.join()
   paragraph("s2: >${s2}<")
   ArrayList revivedBlks = []
-  m = getMatcher('StashRef')
+  m = getMatcher('RestoreRef')
   m.reset(s2)
   lStart = 0
   while (m.find()) {

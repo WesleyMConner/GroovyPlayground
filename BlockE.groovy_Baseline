@@ -125,7 +125,7 @@ Matcher getMatcher(String name) {
         String paraRE = /(^\[pass]\n)(.*?\n)(\n|$))/
         matcher = Pattern.compile(/(?ms)$paraRE/).matcher('')
         break
-      case 'StashRef':
+      case 'RestoreRef':
         matcher = Pattern.compile(/(\{\{)(.*?)(\}\})/).matcher('')
         break
       case 'Linebreak':
@@ -491,7 +491,7 @@ void processString() {
   //-> isolatePassthrough(sIn)
   String s2 = finalizeContent(sIn, 'PassthroughRange', 'm.group(2)')
   String s3 = finalizeContent(s2, 'PassthroughPara', 'm.group(2)')
-  String sFinal = replaceRef(s3, 'StashRef', 'm.group(2)')
+  String sFinal = replaceRef(s3, 'RestoreRef', 'm.group(2)')
   paragrapgh("sFinal: >$sFinal<")
 
   /*

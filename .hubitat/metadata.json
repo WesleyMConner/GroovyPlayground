@@ -57,8 +57,20 @@
     {
       "filepath": "/Users/wes/hubitat-workspace/GroovyPlayground/BlockF.groovy",
       "codeType": "app",
-      "id": 559,
-      "version": 41
+      "id": 563,
+      "version": 161
+    },
+    {
+      "filepath": "/Users/wes/hubitat-workspace/GroovyPlayground/demoA_GstringResolve.groovy",
+      "codeType": "app",
+      "id": 560,
+      "version": 1
+    },
+    {
+      "filepath": "/Users/wes/hubitat-workspace/GroovyPlayground/BlockF_WorkingApplyTerms.groovy",
+      "codeType": "app",
+      "id": 562,
+      "version": 2
     }
   ]
 }

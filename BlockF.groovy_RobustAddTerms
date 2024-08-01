@@ -175,7 +175,7 @@ void initializeTerms() {
     replacerFn: stashContent
   )
   addTerm(
-    name: 'StashRef',
+    name: 'RestoreRef',
     re: /(\{\{)(.*?)(\}\})/,
     replacerFn: retrieveContent
   )
@@ -312,7 +312,7 @@ void processString() {
   String s2 = t2.replaceAll(s1)
   paragraph("s2: >${s2}<")
 
-  Map t3 = TERMS['StashRef']
+  Map t3 = TERMS['RestoreRef']
   String s3 = t3.replaceAll(s2)
   paragraph("s3: >${s3}<")
 }
@@ -325,7 +325,7 @@ String matchAndReplace(String sArg) {
     'PassthroughRange',
     'PassthroughPara',
     'PassthroughBlock',
-    'StashRef',
+    'RestoreRef',
     'Linebreak',
     'Italic',
     'Bold',

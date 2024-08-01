@@ -88,7 +88,7 @@ Matcher getMatcher(String name) {
         String paraRE = /(^\[pass\]\n)(.*?\n)(\n|$)/
         matcher = Pattern.compile(/(?ms)$paraRE/).matcher('')
         break
-      case 'StashRef':
+      case 'RestoreRef':
         matcher = Pattern.compile(/(\{\{)(.*?)(\}\})/).matcher('')
         break
       case 'Linebreak':
@@ -486,7 +486,7 @@ def replaceAllWithFn = { String parserName, String sIn, Closure replacerFn ->
   paragraph("s2: >${s2}<")
   String s3 = replaceAllWithFn('PassthroughPara', s2, stashContent)
   paragraph("s3: >${s3}<")
-  String sFinal = replaceAllWithFn('StashRef', s3, retrieveContent)
+  String sFinal = replaceAllWithFn('RestoreRef', s3, retrieveContent)
   paragraph("sFinal: >${sFinal}<")
 }
 
